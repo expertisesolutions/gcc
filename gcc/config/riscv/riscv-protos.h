@@ -106,6 +106,7 @@ struct riscv_address_info {
 extern const char *riscv_asm_output_opcode (FILE *asm_out_file, const char *p);
 extern enum riscv_symbol_type riscv_classify_symbolic_expression (rtx);
 extern bool riscv_symbolic_constant_p (rtx, enum riscv_symbol_type *);
+extern int riscv_float_const_rtx_cost_for_zint (rtx);
 extern int riscv_float_const_rtx_index_for_fli (rtx);
 extern int riscv_regno_mode_ok_for_base_p (int, machine_mode, bool);
 extern bool riscv_valid_base_register_p (rtx, machine_mode, bool);

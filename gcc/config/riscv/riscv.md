@@ -68,6 +68,7 @@
   UNSPEC_FMAX
   UNSPEC_FMINM
   UNSPEC_FMAXM
+  UNSPEC_FMV
 
   ;; Stack tie
   UNSPEC_TIE
@@ -2533,6 +2534,26 @@
    (set_attr "mode" "QI")
    (set_attr "type" "move,move,load,store,mtc,mfc,move")
    (set_attr "ext" "base,base,base,base,f,f,vector")])
+
+(define_insn "movsfisi"
+  [(set (match_operand:SF 0 "nonimmediate_operand"     "= f")
+    (unspec:SF [(match_operand:SI 1 "reg_or_0_operand" " rJ")] UNSPEC_FMV))]
+  "TARGET_HARD_FLOAT"
+  {
+    return "fmv.w.x \t%0,%1";
+  }
+  [(set_attr "type" "fmove")
+   (set_attr "mode" "SF")])
+
+(define_insn "movdfidi"
+  [(set (match_operand:DF 0 "nonimmediate_operand"     "= f")
+    (unspec:DF [(match_operand:DI 1 "reg_or_0_operand" " rJ")] UNSPEC_FMV))]
+  "TARGET_64BIT && TARGET_DOUBLE_FLOAT"
+  {
+    return "fmv.d.x \t%0,%1";
+  }
+  [(set_attr "type" "fmove")
+   (set_attr "mode" "DF")])
 
 ;; 32-bit floating point moves
 

@@ -1514,6 +1514,49 @@ riscv_float_const_rtx_index_for_fli (rtx x)
   return -1;
 }
 
+int
+riscv_float_const_rtx_cost_for_zint (rtx x)
+{
+  machine_mode mode = GET_MODE (x);
+  int integer_cost;
+
+  if (!(!TARGET_ZFA
+        && CONST_DOUBLE_P(x)
+        && (mode == SFmode || mode == DFmode)
+        && (mode != SFmode || TARGET_HARD_FLOAT)
+        && (mode != DFmode || (TARGET_DOUBLE_FLOAT && TARGET_64BIT))))
+    return 0;
+
+  if (!SCALAR_FLOAT_MODE_P (mode)
+      || GET_MODE_BITSIZE (mode).to_constant () > HOST_BITS_PER_WIDE_INT
+      /* Only support up to DF mode.  */
+      || GET_MODE_BITSIZE (mode).to_constant () > GET_MODE_BITSIZE (DFmode))
+    return 0;
+
+  unsigned HOST_WIDE_INT ival = 0;
+
+  long res[2];
+  real_to_target (res,
+		  CONST_DOUBLE_REAL_VALUE (x),
+		  REAL_MODE_FORMAT (mode));
+
+  if (mode == DFmode) {
+    int order = BYTES_BIG_ENDIAN ? 1 : 0;
+    ival = zext_hwi (res[order], GET_MODE_BITSIZE(mode).to_constant()/2);
+    ival |= zext_hwi (res[1 - order], GET_MODE_BITSIZE(mode).to_constant()/2) <<
+      (GET_MODE_BITSIZE(mode).to_constant()/2);
+  }
+  else
+    ival = zext_hwi (res[0], GET_MODE_BITSIZE(mode).to_constant());
+
+  integer_cost = riscv_integer_cost (ival);
+  if (integer_cost < 3)
+    return  integer_cost+1;
+
+  return 0;
+}
+
+
 /* Implement TARGET_LEGITIMATE_CONSTANT_P.  */
 
 static bool
@@ -2095,8 +2138,15 @@ riscv_const_insns (rtx x)
       if (satisfies_constraint_zfli (x))
 	return 1;
 
+      if (x == CONST0_RTX (GET_MODE (x)))
+        return 1;
+
+      /* See if we can use FMV with an integer materialization.  */
+      if (satisfies_constraint_zint (x))
+        return riscv_float_const_rtx_cost_for_zint(x);
+
       /* We can use x0 to load floating-point zero.  */
-      return x == CONST0_RTX (GET_MODE (x)) ? 1 : 0;
+      return 0;
     case CONST_VECTOR:
       {
 	/* TODO: This is not accurate, we will need to
@@ -3434,6 +3484,38 @@ riscv_legitimize_move (machine_mode mode, rtx dest, rtx src)
     {
       XEXP (src, 0) = riscv_force_address (XEXP (src, 0), mode);
     }
+
+  if (satisfies_constraint_zint (src) && GET_CODE(dest) == REG
+      && GET_MODE(dest) == mode && GET_MODE(src) == mode
+      && (mode == SFmode || mode == DFmode)
+      && !TARGET_ZFA
+      && ((mode == SFmode && TARGET_HARD_FLOAT)
+          || (mode == DFmode && TARGET_DOUBLE_FLOAT))) {
+      unsigned HOST_WIDE_INT ival = 0;
+
+      long res[2];
+      real_to_target (res,
+		      CONST_DOUBLE_REAL_VALUE (src),
+		      REAL_MODE_FORMAT (mode));
+
+      if (mode == DFmode) {
+        int order = BYTES_BIG_ENDIAN ? 1 : 0;
+        ival = zext_hwi (res[order], GET_MODE_BITSIZE(mode).to_constant()/2);
+        ival |= zext_hwi (res[1 - order], GET_MODE_BITSIZE(mode).to_constant()/2) <<
+          GET_MODE_BITSIZE(mode).to_constant()/2;
+      }
+      else
+        ival = zext_hwi (res[0], GET_MODE_BITSIZE(mode).to_constant());
+
+      machine_mode intmode = (mode == SFmode) ? SImode : DImode;
+      rtx t1 = gen_rtx_CONST_INT (intmode, ival);
+      rtx t2 = gen_reg_rtx (intmode);
+
+      emit_move_insn (t2, t1);
+      riscv_emit_move (dest, gen_rtx_UNSPEC (mode, gen_rtvec (1, t2), UNSPEC_FMV));
+
+      return true;
+  }
 
   return false;
 }

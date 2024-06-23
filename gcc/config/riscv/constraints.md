@@ -141,6 +141,11 @@
   (and (match_operand 0 "move_operand")
        (match_test "CONSTANT_P (op)")))
 
+(define_constraint "zint"
+  "A floating point number that can be materialized with integer instructions in two or less instructions"
+  (and (match_code "const_double")
+       (match_test "!TARGET_ZFA && riscv_float_const_rtx_cost_for_zint (op) > 0")))
+
 ;; Zfa constraints.
 
 (define_constraint "zfli"
